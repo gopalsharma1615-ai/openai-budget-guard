@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenAI Budget Guard</title>
+<style>
+:root{
+  --bg:#f7f7f5; --surface:#ffffff; --surface-2:#f0efeb; --text:#1d1d1b; --muted:#5f5e5a; --border:#e2e0da;
+  --accent:#2f5bd3; --accent-soft:#e7edfb; --ok:#1f7a4d; --ok-soft:#e3f3ea; --warn:#a15c00; --warn-soft:#fbefdc;
+  --bad:#b3261e; --bad-soft:#fbe6e4; --code-bg:#1e1f24; --code-text:#e8e6e1;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141517; --surface:#1c1d20; --surface-2:#232428; --text:#ecebe7; --muted:#a3a19b; --border:#2f3035;
+    --accent:#7d9cf0; --accent-soft:#1f2a45; --ok:#5cc58f; --ok-soft:#183324; --warn:#e8a64a; --warn-soft:#3a2a12;
+    --bad:#f08a82; --bad-soft:#3d1c1a; --code-bg:#0f1012; --code-text:#e8e6e1;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141517; --surface:#1c1d20; --surface-2:#232428; --text:#ecebe7; --muted:#a3a19b; --border:#2f3035;
+  --accent:#7d9cf0; --accent-soft:#1f2a45; --ok:#5cc58f; --ok-soft:#183324; --warn:#e8a64a; --warn-soft:#3a2a12;
+  --bad:#f08a82; --bad-soft:#3d1c1a; --code-bg:#0f1012; --code-text:#e8e6e1;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 var(--sans)}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.88em;background:var(--surface-2);padding:.1em .35em;border-radius:4px}
+.layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px;max-width:1180px;margin:0 auto;padding:0 24px}
+nav.toc{position:sticky;top:0;align-self:start;padding:40px 0;max-height:100vh;overflow:auto}
+nav.toc .brand{font-weight:700;margin-bottom:16px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:4px 0;font-size:.92rem}
+nav.toc a:hover{color:var(--text)}
+main{padding:40px 0 96px;min-width:0}
+header.hero h1{font-size:2.2rem;line-height:1.2;margin:0 0 12px;letter-spacing:-.01em}
+header.hero p.lead{font-size:1.15rem;color:var(--muted);max-width:62ch;margin:0 0 24px}
+.pill-row{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:.82rem;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+section{margin-top:64px;scroll-margin-top:24px}
+h2{font-size:1.5rem;margin:0 0 8px;letter-spacing:-.01em}
+h3{font-size:1.08rem;margin:28px 0 8px}
+p.sub{color:var(--muted);margin:0 0 20px;max-width:70ch}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card h4{margin:0 0 6px;font-size:1rem}
+.card p{margin:0;color:var(--muted);font-size:.94rem}
+/* flow */
+.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:stretch}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;position:relative}
+.step .n{font-family:var(--mono);font-size:.75rem;color:var(--accent);font-weight:700}
+.step b{display:block;margin:2px 0 4px}
+.step span{font-size:.86rem;color:var(--muted)}
+.step.block{border-color:var(--bad);background:var(--bad-soft)}
+.step.block .n{color:var(--bad)}
+.branch{margin-top:10px;font-size:.9rem;color:var(--muted)}
+/* tables */
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--surface-2);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:.86rem}
+/* code */
+.code{position:relative;margin:12px 0}
+.code pre{margin:0;background:var(--code-bg);color:var(--code-text);padding:16px 18px;border-radius:10px;overflow-x:auto;font:13.5px/1.55 var(--mono)}
+.code .lang{position:absolute;top:8px;left:14px;font:600 10px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:#8c8a85}
+.code pre.has-lang{padding-top:28px}
+.copy{position:absolute;top:8px;right:8px;font:600 12px var(--sans);background:#2c2d33;color:#d8d6d1;border:1px solid #3a3b42;border-radius:6px;padding:4px 10px;cursor:pointer}
+.copy:hover{background:#383a41}
+.c-com{color:#8c8a85}.c-str{color:#a9d18e}.c-kw{color:#9fb7ff}
+/* errors */
+.err{border-left:4px solid var(--bad);background:var(--bad-soft);padding:12px 16px;border-radius:8px;font:13.5px/1.5 var(--mono);margin:10px 0;overflow-x:auto}
+.err .code-tag{display:inline-block;font-family:var(--sans);font-size:.75rem;font-weight:700;color:var(--bad);margin-bottom:4px}
+.note{border-left:4px solid var(--warn);background:var(--warn-soft);padding:12px 16px;border-radius:8px;font-size:.94rem;margin:16px 0}
+/* scope diagram */
+.scope{display:grid;gap:12px}
+.scope .agg{border:2px dashed var(--accent);border-radius:14px;padding:16px}
+.scope .agg-label{font-weight:700;color:var(--accent);font-size:.9rem;margin-bottom:12px}
+.tasks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.task{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:.9rem}
+.task b{display:block;font-family:var(--mono);font-size:.88rem}
+.task span{color:var(--muted)}
+/* tabs */
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:4px}
+.tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 14px;font:600 .92rem var(--sans);color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--accent);border-color:var(--accent)}
+.panel[hidden]{display:none}
+/* calculator */
+.calc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:.85rem;font-weight:600;color:var(--muted)}
+.field input,.field select{font:15px var(--sans);padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);width:100%}
+.field input:focus,.field select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.result .big{font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.result .big small{font-size:.9rem;color:var(--muted);font-weight:500}
+.bar{display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--surface-2);margin:12px 0 6px}
+.bar i{display:block;height:100%}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.82rem;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--sw)}
+.budget-meter{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);font-size:.92rem}
+.state{display:inline-block;font-size:.78rem;font-weight:700;padding:2px 8px;border-radius:999px}
+.state.ok{background:var(--ok-soft);color:var(--ok)}.state.low{background:var(--warn-soft);color:var(--warn)}.state.bad{background:var(--bad-soft);color:var(--bad)}
+footer{margin-top:72px;color:var(--muted);font-size:.88rem;border-top:1px solid var(--border);padding-top:20px}
+.theme-btn{margin-top:20px;font:600 .82rem var(--sans);background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer}
+@media (max-width:900px){
+  .layout{grid-template-columns:minmax(0,1fr);padding:0 16px;gap:0}
+  nav.toc{display:none}
+  .flow{grid-template-columns:minmax(0,1fr)}
+  .g3,.g2,.tasks,.calc{grid-template-columns:minmax(0,1fr)}
+  header.hero h1{font-size:1.75rem}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="brand">Budget Guard</div>
+  <a href="#demo">Demo walkthrough</a>
+  <a href="#how">How it works</a>
+  <a href="#concepts">Concepts</a>
+  <a href="#scopes">Individual vs aggregate</a>
+  <a href="#errors">What the app sees</a>
+  <a href="#integrate">Ways to integrate</a>
+  <a href="#cli">CLI reference</a>
+  <a href="#calculator">Cost calculator</a>
+  <a href="#prices">Price book</a>
+  <a href="#safety">Accuracy &amp; safety</a>
+  <a href="#limits">Limits &amp; notes</a>
+  <a href="#files">Files</a>
+  <button class="theme-btn" id="themeBtn" type="button">Toggle theme</button>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>OpenAI Budget Guard</h1>
+  <p class="lead">Give each OpenAI API key a token or cost budget, for the key as a whole or for one task. Every request is checked before it is sent and metered after it returns. When a budget runs out, the request never reaches OpenAI and the app gets a clear "budget exhausted" error.</p>
+  <div class="pill-row">
+    <span class="pill">Per-key budgets</span><span class="pill">Per-task budgets</span><span class="pill">Input / cached / output tokens</span>
+    <span class="pill">USD cost limits</span><span class="pill">Hourly → monthly windows</span><span class="pill">Streaming</span>
+    <span class="pill">Python SDK + any-language proxy</span>
+  </div>
+</header>
+
+<section id="demo">
+  <h2>Demo walkthrough</h2>
+  <p class="sub">A five-minute script for showing it live. Each step lists what to run, what the audience sees and what to say. Start with <code>--mock</code> (no network, no spend), then repeat with a real key.</p>
+
+  <h3>Step 1 · Allot budgets to one key</h3>
+  <p class="sub">One key gets a key-wide cap and two task-specific caps.</p>
+  <div class="code"><span class="lang">python · examples/demo.py</span><button class="copy" type="button">Copy</button><pre class="has-lang">guard.set_budget(key, <span class="c-str">"*"</span>,         max_cost_usd=<span class="c-str">0.01</span>, label=<span class="c-str">"demo"</span>)   <span class="c-com"># aggregate: 1 cent across all tasks</span>
+guard.set_budget(key, <span class="c-str">"summarize"</span>, max_output_tokens=<span class="c-str">400</span>)           <span class="c-com"># individual: summarize may emit 400 tokens</span>
+guard.set_budget(key, <span class="c-str">"qa"</span>,        max_input_tokens=<span class="c-str">2_000</span>)          <span class="c-com"># individual: qa may read 2k input tokens</span></pre></div>
+  <p class="sub"><b>Say:</b> "This is the same OpenAI key. Each team or feature gets its own allowance, and the whole key also has a hard dollar ceiling."</p>
+
+  <h3>Step 2 · Make normal OpenAI calls</h3>
+  <div class="code"><span class="lang">python</span><button class="copy" type="button">Copy</button><pre class="has-lang">client = guarded_openai(key, task=<span class="c-str">"summarize"</span>, guard=guard)   <span class="c-com"># a regular openai.OpenAI client</span>
+qa     = for_task(client, <span class="c-str">"qa"</span>)
+<span class="c-kw">for</span> i <span class="c-kw">in</span> range(<span class="c-str">6</span>):
+    <span class="c-kw">for</span> name, c <span class="c-kw">in</span> ((<span class="c-str">"summarize"</span>, client), (<span class="c-str">"qa"</span>, qa)):
+        c.chat.completions.create(model=<span class="c-str">"gpt-4o-mini"</span>, max_tokens=<span class="c-str">150</span>, messages=[...])</pre></div>
+  <p class="sub"><b>Say:</b> "The application code is untouched. Only the client constructor changed."</p>
+
+  <h3>Step 3 · Run it and watch the budgets close</h3>
+  <div class="code"><span class="lang">bash</span><button class="copy" type="button">Copy</button><pre class="has-lang">git clone https://github.com/gopalsharma1615-ai/openai-budget-guard && cd openai-budget-guard
+python examples/demo.py --mock</pre></div>
+  <div class="code"><pre>[summarize] ok: 'Hello'                      <span class="c-com">← each call: 600 input + 400 cached + 200 output tokens</span>
+[qa] ok: 'Hello'
+[summarize] ok: 'Hello'                      <span class="c-com">← summarize has now used 400/400 output tokens</span>
+[qa] ok: 'Hello'
+[summarize] BLOCKED (token_budget_exhausted): Token budget exhausted for OpenAI key sk-...demo,
+            task 'summarize': used 400 output tokens of 400 output tokens.
+[qa] ok: 'Hello'                             <span class="c-com">← qa is unaffected: budgets are individual</span>
+[summarize] BLOCKED (token_budget_exhausted): ...
+[qa] BLOCKED (token_budget_exhausted): Token budget exhausted for OpenAI key sk-...demo,
+            task 'qa': used 2,400 input tokens of 2,000 input tokens.
+
+         *       cost_usd: $0.0014 / 0.01 (14.4%)   <span class="c-com">← aggregate still has room</span>
+        qa   input_tokens: 2,400 / 2,000 (120.0%)
+ summarize  output_tokens: 400 / 400 (100.0%)</pre></div>
+  <p class="sub"><b>Say:</b> "Blocked calls never reached OpenAI, so they cost nothing. The app received a normal OpenAI <code>RateLimitError</code> with a readable message and a machine-readable <code>code</code>."</p>
+  <div class="note"><b>Why is qa at 2,400 of 2,000?</b> The pre-check estimated about 15 input tokens for the short prompt, so the 4th call was allowed at 1,800 used. The mock server then reported 600 tokens. Against the real API, the actual prompt size is close to the estimate. Either way, the budget is closed from that point on.</div>
+
+  <h3>Step 4 · Show the aggregate cap</h3>
+  <p class="sub">Lower the key-wide budget so it trips before the task budgets do. Every task is then blocked with the same message.</p>
+  <div class="code"><span class="lang">python</span><button class="copy" type="button">Copy</button><pre class="has-lang">guard.set_budget(key, <span class="c-str">"*"</span>, max_cost_usd=<span class="c-str">0.0005</span>)
+<span class="c-com"># → Cost budget exhausted for OpenAI key sk-...demo, all tasks combined: used $0.0007 of $0.0005.</span></pre></div>
+
+  <h3>Step 5 · Show the accounting</h3>
+  <div class="code"><span class="lang">bash</span><button class="copy" type="button">Copy</button><pre class="has-lang">export OBG_DB=demo_usage.db                  <span class="c-com"># the ledger the demo wrote</span>
+python -m openai_budget_guard status         <span class="c-com"># used / limit / remaining / state</span>
+python -m openai_budget_guard report         <span class="c-com"># input, cached, output tokens and $ per task and model</span>
+python -m openai_budget_guard log            <span class="c-com"># every request, with status final / estimated</span>
+python -m openai_budget_guard cost --model gpt-4o --input 12000 --cached 8000 --output 900 --calls 1000</pre></div>
+  <p class="sub"><b>Say:</b> "Every call is broken down into uncached input, cached input and output, each priced at its own rate. The same numbers drive the limits."</p>
+
+  <h3>Step 6 · Same thing for a non-Python app</h3>
+  <div class="code"><span class="lang">bash</span><button class="copy" type="button">Copy</button><pre class="has-lang">OBG_DB=demo_usage.db python -m openai_budget_guard proxy --port 8787
+<span class="c-com"># any app: baseURL = http://localhost:8787/v1, header X-Budget-Task: summarize</span>
+curl -s http://localhost:8787/budget/status -H <span class="c-str">"Authorization: Bearer $OPENAI_API_KEY"</span></pre></div>
+  <p class="sub"><b>Real run:</b> <code>export OPENAI_API_KEY=sk-...</code> and then <code>python examples/demo.py</code> without <code>--mock</code>. It costs a few cents at most with <code>gpt-4o-mini</code>.</p>
+</section>
+
+<section id="how">
+  <h2>How it works</h2>
+  <p class="sub">The guard sits between your app and OpenAI as an httpx transport (in Python) or as a small proxy (for any language). Each metered request goes through five steps.</p>
+  <div class="flow">
+    <div class="step"><div class="n">01</div><b>Identify</b><span>Reads the key from the <code>Authorization</code> header and stores only a hash of it. The task comes from the client setting or the <code>X-Budget-Task</code> header.</span></div>
+    <div class="step"><div class="n">02</div><b>Estimate</b><span>Counts prompt tokens with tiktoken and adds <code>max_tokens</code> (or 512) for output. This gives the worst-case cost of the request.</span></div>
+    <div class="step"><div class="n">03</div><b>Check &amp; reserve</b><span>Checks the task budget and the key-wide budget in one atomic step. If both pass, the estimate is held in the ledger.</span></div>
+    <div class="step"><div class="n">04</div><b>Forward</b><span>Sends the unchanged request to OpenAI. Streaming responses are passed through as they arrive.</span></div>
+    <div class="step"><div class="n">05</div><b>Meter</b><span>Reads the actual <code>usage</code> from the response, splits it into input, cached and output tokens, prices each part and replaces the estimate.</span></div>
+  </div>
+  <p class="branch"><b>If step 03 fails:</b> nothing is sent to OpenAI and the app gets <b>HTTP 429</b> with a budget message. <b>If OpenAI returns an error:</b> the reservation is released, because failed calls are not billed.</p>
+</section>
+
+<section id="concepts">
+  <h2>Concepts</h2>
+  <div class="grid g3">
+    <div class="card"><h4>Key</h4><p>Identified by <code>sha256(key)[:16]</code>. The raw key is never written to disk. Reports show <code>sk-...abcd</code> or a label you choose.</p></div>
+    <div class="card"><h4>Task</h4><p>Any name you pick, such as <code>summarize</code>, <code>rag</code> or <code>client-demo-3</code>. Usage is recorded per task so you can see where the money went.</p></div>
+    <div class="card"><h4>Budget</h4><p>A set of limits attached to a key and a task. Task <code>*</code> means all of the key's tasks combined.</p></div>
+    <div class="card"><h4>Limits</h4><p>Any combination of <code>max_cost_usd</code>, <code>max_total_tokens</code>, <code>max_input_tokens</code>, <code>max_cached_tokens</code> and <code>max_output_tokens</code>.</p></div>
+    <div class="card"><h4>Period</h4><p><code>none</code> (lifetime), <code>hourly</code>, <code>daily</code>, <code>weekly</code> or <code>monthly</code>. Windows reset on UTC boundaries.</p></div>
+    <div class="card"><h4>Ledger</h4><p>A SQLite file (WAL mode) with one row per request. It is shared safely across threads and processes. Location: <code>$OBG_DB</code> or <code>~/.openai_budget_guard/usage.db</code>.</p></div>
+  </div>
+  <h3>The three token types</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Type</th><th>What it is</th><th>Comes from</th><th>Priced at</th></tr></thead>
+    <tbody>
+      <tr><td><b>Input</b></td><td>Prompt tokens that were <i>not</i> served from OpenAI's prompt cache</td><td><code>prompt_tokens − cached_tokens</code></td><td>input rate</td></tr>
+      <tr><td><b>Cached</b></td><td>Prompt tokens served from the prompt cache (repeated prefixes)</td><td><code>prompt_tokens_details.cached_tokens</code></td><td>cached rate (usually 50–90% cheaper)</td></tr>
+      <tr><td><b>Output</b></td><td>Generated tokens, including hidden reasoning tokens</td><td><code>completion_tokens</code> / <code>output_tokens</code></td><td>output rate</td></tr>
+    </tbody>
+  </table></div>
+  <p class="sub" style="margin-top:12px">Both usage formats are understood: Chat Completions and Embeddings (<code>prompt_tokens</code>) and the Responses API (<code>input_tokens</code>).</p>
+</section>
+
+<section id="scopes">
+  <h2>Individual vs aggregate budgets</h2>
+  <p class="sub">A request must pass <b>every</b> budget that applies to it: its own task's budget and the key-wide <code>*</code> budget. Either one can block it.</p>
+  <div class="scope">
+    <div class="agg">
+      <div class="agg-label">Key sk-...abcd · task <code>*</code> · max $5.00 / month (aggregate)</div>
+      <div class="tasks">
+        <div class="task"><b>summarize</b><span>max 50,000 output tokens</span></div>
+        <div class="task"><b>qa</b><span>max 200,000 input tokens / day</span></div>
+        <div class="task"><b>rag</b><span>no own budget, so only the $5 cap applies</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h4>Individually exhausted</h4><p><code>summarize</code> hits 50k output tokens. Only <code>summarize</code> is blocked. <code>qa</code> and <code>rag</code> keep working.</p></div>
+    <div class="card"><h4>Aggregately exhausted</h4><p>All three tasks together reach $5. Every task on this key is blocked until the next monthly window or until you raise or reset the budget.</p></div>
+  </div>
+  <p class="sub" style="margin-top:16px">Keys are fully independent. Exhausting one key never affects another.</p>
+</section>
+
+<section id="errors">
+  <h2>What the app sees when a budget runs out</h2>
+  <p class="sub">The response is shaped like a normal OpenAI error, so any OpenAI SDK (Python, JS, Go, ...) raises it as usual. The status is 429 with <code>x-should-retry: false</code>, so the SDK raises immediately and does not retry.</p>
+  <div class="err"><div class="code-tag">cost_budget_exhausted</div><br>Cost budget exhausted for OpenAI key sk-...abcd, all tasks combined, monthly window: used $5.0012 of $5.0000.</div>
+  <div class="err"><div class="code-tag">token_budget_exhausted</div><br>Token budget exhausted for OpenAI key sk-...abcd, task 'summarize': used 50,183 output tokens of 50,000 output tokens.</div>
+  <div class="err"><div class="code-tag">token_budget_exhausted · preflight</div><br>Token budget insufficient for OpenAI key sk-...abcd, task 'qa': this request may need up to 4,000 output tokens but only 1,250 output tokens of 10,000 output tokens remains.</div>
+  <div class="err"><div class="code-tag">no_budget_allotted · only with require_budget=True</div><br>No budget allotted for OpenAI key sk-...abcd; requests are refused until one is set.</div>
+  <div class="code"><span class="lang">python</span><button class="copy" type="button">Copy</button><pre class="has-lang"><span class="c-kw">try</span>:
+    r = client.chat.completions.create(model=<span class="c-str">"gpt-4o-mini"</span>, messages=msgs)
+<span class="c-kw">except</span> openai.RateLimitError <span class="c-kw">as</span> e:
+    <span class="c-kw">if</span> e.code <span class="c-kw">in</span> (<span class="c-str">"cost_budget_exhausted"</span>, <span class="c-str">"token_budget_exhausted"</span>):
+        show_banner(e.body[<span class="c-str">"message"</span>])        <span class="c-com"># human-readable message</span>
+        details = e.body[<span class="c-str">"budget"</span>]                <span class="c-com"># task, dimension, used, limit, requested ...</span></pre></div>
+  <p class="sub">An unpriced model returns <b>HTTP 400</b> with <code>unknown_model_pricing</code> instead, so spend can't go uncounted by accident.</p>
+</section>
+
+<section id="integrate">
+  <h2>Ways to integrate</h2>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-tab="py">Python client</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="async">Async / LangChain</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="proxy">Proxy (any language)</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="api">Admin API</button>
+  </div>
+
+  <div class="panel" data-panel="py">
+    <p class="sub" style="margin-top:12px"><code>guarded_openai()</code> returns a normal <code>openai.OpenAI</code> client. The rest of your code stays the same.</p>
+    <div class="code"><span class="lang">python</span><button class="copy" type="button">Copy</button><pre class="has-lang"><span class="c-kw">from</span> openai_budget_guard <span class="c-kw">import</span> BudgetGuard, guarded_openai, for_task
+
+guard = BudgetGuard()                                    <span class="c-com"># uses $OBG_DB or ~/.openai_budget_guard/usage.db</span>
+guard.set_budget(key, <span class="c-str">"*"</span>, max_cost_usd=<span class="c-str">5</span>, period=<span class="c-str">"monthly"</span>, label=<span class="c-str">"sales-demo"</span>)
+guard.set_budget(key, <span class="c-str">"summarize"</span>, max_output_tokens=<span class="c-str">50_000</span>)
+
+client = guarded_openai(key, task=<span class="c-str">"summarize"</span>, guard=guard)
+client.chat.completions.create(model=<span class="c-str">"gpt-4o-mini"</span>, messages=[...])
+
+rag = for_task(client, <span class="c-str">"rag"</span>)                           <span class="c-com"># same connection pool, billed to "rag"</span>
+rag.responses.create(model=<span class="c-str">"gpt-5-mini"</span>, input=<span class="c-str">"..."</span>)
+rag.embeddings.create(model=<span class="c-str">"text-embedding-3-small"</span>, input=docs)
+
+client.chat.completions.create(..., extra_headers={<span class="c-str">"X-Budget-Task"</span>: <span class="c-str">"qa"</span>})  <span class="c-com"># one-off task</span></pre></div>
+  </div>
+
+  <div class="panel" data-panel="async" hidden>
+    <div class="code"><span class="lang">python</span><button class="copy" type="button">Copy</button><pre class="has-lang"><span class="c-com"># asyncio</span>
+<span class="c-kw">from</span> openai_budget_guard <span class="c-kw">import</span> guarded_async_openai
+client = guarded_async_openai(key, task=<span class="c-str">"chatbot"</span>)
+stream = <span class="c-kw">await</span> client.chat.completions.create(model=<span class="c-str">"gpt-4o"</span>, messages=msgs, stream=<span class="c-kw">True</span>)
+
+<span class="c-com"># LangChain (or anything else that accepts an httpx client)</span>
+<span class="c-kw">import</span> openai
+<span class="c-kw">from</span> langchain_openai <span class="c-kw">import</span> ChatOpenAI
+<span class="c-kw">from</span> openai_budget_guard <span class="c-kw">import</span> BudgetGuard, BudgetTransport
+
+llm = ChatOpenAI(model=<span class="c-str">"gpt-4o-mini"</span>,
+                 http_client=openai.DefaultHttpxClient(transport=BudgetTransport(BudgetGuard(), <span class="c-str">"langchain-demo"</span>)))</pre></div>
+  </div>
+
+  <div class="panel" data-panel="proxy" hidden>
+    <p class="sub" style="margin-top:12px">For Node, Java, Go, curl or any tool that lets you set a base URL. The app keeps its own OpenAI key.</p>
+    <div class="code"><span class="lang">bash</span><button class="copy" type="button">Copy</button><pre class="has-lang">python -m openai_budget_guard proxy --port 8787          <span class="c-com"># --task sets the default task</span></pre></div>
+    <div class="code"><span class="lang">javascript</span><button class="copy" type="button">Copy</button><pre class="has-lang"><span class="c-kw">const</span> client = <span class="c-kw">new</span> OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: <span class="c-str">"http://localhost:8787/v1"</span>,
+  defaultHeaders: { <span class="c-str">"X-Budget-Task"</span>: <span class="c-str">"web-demo"</span> },
+});</pre></div>
+    <div class="code"><span class="lang">bash</span><button class="copy" type="button">Copy</button><pre class="has-lang">curl http://localhost:8787/v1/chat/completions \
+  -H <span class="c-str">"Authorization: Bearer $OPENAI_API_KEY"</span> -H <span class="c-str">"X-Budget-Task: curl-test"</span> \
+  -H <span class="c-str">"Content-Type: application/json"</span> \
+  -d <span class="c-str">'{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'</span></pre></div>
+  </div>
+
+  <div class="panel" data-panel="api" hidden>
+    <div class="table-wrap" style="margin-top:12px"><table>
+      <thead><tr><th>BudgetGuard method</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>set_budget(key, task="*", max_cost_usd=…, max_total_tokens=…, max_input_tokens=…, max_cached_tokens=…, max_output_tokens=…, period="none", label=None)</code></td><td>Create or update a budget</td></tr>
+        <tr><td><code>remove_budget(key, task)</code></td><td>Delete a budget (usage history is kept)</td></tr>
+        <tr><td><code>reset_usage(key, task=None)</code></td><td>Clear recorded usage for the key or one task</td></tr>
+        <tr><td><code>status(key=None)</code></td><td>Used, limit, remaining, % used and an exhausted flag for each budget</td></tr>
+        <tr><td><code>cost(model, input, cached, output)</code></td><td>Calculator. Returns a <code>Cost</code> with the per-part and total USD</td></tr>
+        <tr><td><code>store.report(...)</code> / <code>store.recent(...)</code></td><td>Grouped usage and cost, or the latest requests</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Constructor options</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Option</th><th>Default</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>db_path</code></td><td><code>$OBG_DB</code> or <code>~/.openai_budget_guard/usage.db</code></td><td>Point several apps at one file to make them share budgets</td></tr>
+        <tr><td><code>preflight</code></td><td><code>True</code></td><td>Also block requests whose worst case would overshoot. With <code>False</code>, only already-exhausted budgets block</td></tr>
+        <tr><td><code>default_output_reserve</code></td><td><code>512</code> (<code>$OBG_DEFAULT_OUTPUT_RESERVE</code>)</td><td>Output tokens assumed when a request has no <code>max_tokens</code></td></tr>
+        <tr><td><code>unknown_model</code></td><td><code>"block"</code></td><td><code>"allow"</code> lets unpriced models through at $0 (their tokens are still counted)</td></tr>
+        <tr><td><code>require_budget</code></td><td><code>False</code></td><td>Refuse keys that have no budget at all</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Proxy endpoints</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Route</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td><code>/v1/*</code></td><td>Forwarded to OpenAI. Chat, Responses, Embeddings and Completions are metered</td></tr>
+        <tr><td><code>GET /budget/status</code></td><td>Status for the key in <code>Authorization: Bearer</code>. A key can only see its own budgets</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="cli">
+  <h2>CLI reference</h2>
+  <p class="sub">Run <code>python -m openai_budget_guard &lt;command&gt;</code>. Use <code>--key-env OPENAI_API_KEY</code> so the key stays out of your shell history. If you give no key, the CLI prompts for it.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Command</th><th>Example</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>set</code></td><td><code>set --key-env OPENAI_API_KEY --max-cost 5 --period monthly --label sales-demo</code></td><td>Set a key-wide budget (<code>--task</code> defaults to <code>*</code>)</td></tr>
+      <tr><td><code>set</code></td><td><code>set --key-env OPENAI_API_KEY --task summarize --max-output 50000 --max-cached 1000000</code></td><td>Set a task budget</td></tr>
+      <tr><td><code>status</code></td><td><code>status [--key-env …] [--json]</code></td><td>Used, limit, remaining and state (ok / low ≥80% / EXHAUSTED)</td></tr>
+      <tr><td><code>report</code></td><td><code>report --by task model [--period daily]</code></td><td>Input, cached and output tokens and $ per key, task and model</td></tr>
+      <tr><td><code>log</code></td><td><code>log --limit 20</code></td><td>The latest requests with tokens, cost and status</td></tr>
+      <tr><td><code>cost</code></td><td><code>cost --model gpt-4o --input 12000 --cached 8000 --output 900 --calls 1000</code></td><td>Cost calculator</td></tr>
+      <tr><td><code>prices</code></td><td><code>prices</code></td><td>Show the loaded price book</td></tr>
+      <tr><td><code>reset</code></td><td><code>reset --key-env OPENAI_API_KEY [--task summarize]</code></td><td>Clear recorded usage</td></tr>
+      <tr><td><code>remove</code></td><td><code>remove --key-env OPENAI_API_KEY --task summarize</code></td><td>Delete a budget</td></tr>
+      <tr><td><code>proxy</code></td><td><code>proxy --host 0.0.0.0 --port 8787 --task default</code></td><td>Run the any-language proxy</td></tr>
+    </tbody>
+  </table></div>
+  <p class="sub" style="margin-top:12px">Global options: <code>--db PATH</code> and <code>--pricing FILE</code>.</p>
+  <h3>Sample <code>status</code> output</h3>
+  <div class="code"><pre>key       task        period         metric     used    limit  remaining  used%      state
+--------  ---------  -------  -------------  -------  -------  ---------  -----  ---------
+demo-app  * (all)    monthly       cost_usd  $4.1200  $5.0000    $0.8800  82.4%        low
+demo-app  summarize     none  output_tokens   50,183   50,000          0 100.4%  EXHAUSTED
+demo-app  qa           daily   input_tokens   61,400  200,000    138,600  30.7%         ok</pre></div>
+</section>
+
+<section id="calculator">
+  <h2>Cost calculator</h2>
+  <p class="sub">The same arithmetic as <code>obg cost</code>, using the bundled price book. Enter tokens per call and the number of calls. You can optionally compare the result against a budget.</p>
+  <div class="calc">
+    <div class="card">
+      <div class="field"><label for="cModel">Model</label><select id="cModel"></select></div>
+      <div class="row2">
+        <div class="field"><label for="cIn">Input tokens (uncached) / call</label><input id="cIn" type="number" min="0" value="12000"></div>
+        <div class="field"><label for="cCached">Cached tokens / call</label><input id="cCached" type="number" min="0" value="8000"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label for="cOut">Output tokens / call</label><input id="cOut" type="number" min="0" value="900"></div>
+        <div class="field"><label for="cCalls">Number of calls</label><input id="cCalls" type="number" min="1" value="1000"></div>
+      </div>
+      <div class="field"><label for="cBudget">Budget (USD, optional)</label><input id="cBudget" type="number" min="0" step="0.01" value="5"></div>
+    </div>
+    <div class="card result" aria-live="polite">
+      <div style="color:var(--muted);font-size:.88rem">Total for all calls</div>
+      <div class="big" id="rTotal">$0</div>
+      <div style="color:var(--muted);font-size:.9rem" id="rPer"></div>
+      <div class="bar" id="rBar"><i style="background:#2f5bd3"></i><i style="background:#43a37a"></i><i style="background:#d9822b"></i></div>
+      <div class="legend">
+        <span style="--sw:#2f5bd3" id="lIn">Input</span><span style="--sw:#43a37a" id="lCached">Cached</span><span style="--sw:#d9822b" id="lOut">Output</span>
+      </div>
+      <div class="table-wrap" style="margin-top:14px"><table>
+        <thead><tr><th>Part</th><th class="num">$/1M</th><th class="num">Per call</th><th class="num">All calls</th></tr></thead>
+        <tbody id="rRows"></tbody>
+      </table></div>
+      <div class="budget-meter" id="rBudget"></div>
+    </div>
+  </div>
+</section>
+
+<section id="prices">
+  <h2>Price book</h2>
+  <p class="sub">From <code>openai_budget_guard/pricing.json</code>, in USD per 1M tokens. Models match by <b>longest prefix</b>, so <code>gpt-4o-2024-08-06</code> is priced as <code>gpt-4o</code> and <code>gpt-4o-mini-…</code> as <code>gpt-4o-mini</code>. Fine-tuned (<code>ft:…</code>) names are matched by their base model.</p>
+  <div class="note"><b>Verify before trusting the dollar limits.</b> These prices were written from memory, not checked against openai.com/api/pricing. Edit the file, or point <code>OBG_PRICING</code> (or <code>--pricing</code>) at your own copy. Where no cached rate exists, the cached rate equals the input rate.</div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Model</th><th class="num">Input</th><th class="num">Cached input</th><th class="num">Output</th></tr></thead>
+    <tbody id="priceRows"></tbody>
+  </table></div>
+</section>
+
+<section id="safety">
+  <h2>Accuracy &amp; safety guarantees</h2>
+  <div class="grid g2">
+    <div class="card"><h4>No overshoot under concurrency</h4><p>The check and the reservation happen in a single <code>BEGIN IMMEDIATE</code> SQLite transaction. In the test with 20 threads racing a budget that fits 5 calls, exactly 5 succeed.</p></div>
+    <div class="card"><h4>Real usage, not guesses</h4><p>The worst-case estimate is used only for the pre-check. After each response, the ledger row is replaced with OpenAI's reported <code>usage</code>.</p></div>
+    <div class="card"><h4>Streaming handled</h4><p>Streamed chat requests get <code>stream_options.include_usage</code> added. If your code didn't ask for it, the extra usage chunk is removed, so loops like <code>chunk.choices[0]</code> keep working. For the Responses API, usage is read from <code>response.completed</code>.</p></div>
+    <div class="card"><h4>Failures aren't charged</h4><p>An upstream 4xx/5xx or a network error releases the reservation. A stream abandoned before usage arrives keeps its estimate and is marked <code>estimated</code>.</p></div>
+    <div class="card"><h4>No retry storms</h4><p>Blocked responses carry <code>x-should-retry: false</code>, so the OpenAI SDK's automatic retries don't hammer an exhausted budget.</p></div>
+    <div class="card"><h4>Keys never stored</h4><p>Only a SHA-256 prefix and a <code>sk-...abcd</code> hint are kept. The proxy's status endpoint shows a key only its own budgets.</p></div>
+  </div>
+</section>
+
+<section id="limits">
+  <h2>Limits &amp; notes</h2>
+  <div class="table-wrap"><table>
+    <tbody>
+      <tr><td><b>Metered endpoints</b></td><td><code>chat/completions</code>, <code>responses</code>, <code>embeddings</code> and <code>completions</code>. Everything else (files, models, batches, ...) passes through unmetered.</td></tr>
+      <tr><td><b>Not priced</b></td><td>Image generation, audio and realtime usage.</td></tr>
+      <tr><td><b>Overshoot</b></td><td>Without <code>max_tokens</code>, 512 output tokens are assumed. A response that produces more than that can push a budget slightly over once. After that, every request on that budget is blocked.</td></tr>
+      <tr><td><b>Token estimate</b></td><td>Text only. Image inputs are not counted in the pre-check, but they are counted in the actual usage.</td></tr>
+      <tr><td><b>Sharing a budget</b></td><td>Works across processes on one machine through a shared SQLite file. For several machines, run one proxy and point everything at it.</td></tr>
+      <tr><td><b>HTTPS proxy</b></td><td>The Python transport honours <code>HTTPS_PROXY</code> but not <code>NO_PROXY</code>.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="files">
+  <h2>Files</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Path</th><th>Contents</th></tr></thead>
+    <tbody>
+      <tr><td><code>openai_budget_guard/guard.py</code></td><td><code>BudgetGuard</code>: estimating, reserving, metering and the error messages</td></tr>
+      <tr><td><code>openai_budget_guard/store.py</code></td><td>SQLite ledger, budgets, atomic check-and-reserve, reports</td></tr>
+      <tr><td><code>openai_budget_guard/transport.py</code></td><td>Sync and async httpx transports with SSE stream handling</td></tr>
+      <tr><td><code>openai_budget_guard/client.py</code></td><td><code>guarded_openai</code>, <code>guarded_async_openai</code>, <code>for_task</code></td></tr>
+      <tr><td><code>openai_budget_guard/proxy.py</code></td><td>FastAPI proxy for any language</td></tr>
+      <tr><td><code>openai_budget_guard/cli.py</code></td><td>Command-line interface</td></tr>
+      <tr><td><code>openai_budget_guard/pricing.json</code></td><td>Price book (edit this)</td></tr>
+      <tr><td><code>tests/test_guard.py</code></td><td>14 end-to-end tests through the real <code>openai</code> SDK against a mock server (no spend)</td></tr>
+      <tr><td><code>examples/demo.py</code></td><td>Demo showing both tasks being blocked. Run it with <code>--mock</code> to avoid network calls</td></tr>
+    </tbody>
+  </table></div>
+  <div class="code"><span class="lang">bash</span><button class="copy" type="button">Copy</button><pre class="has-lang">git clone https://github.com/gopalsharma1615-ai/openai-budget-guard && cd openai-budget-guard
+python -m pytest tests -q              <span class="c-com"># 14 passed</span>
+python examples/demo.py --mock         <span class="c-com"># see the block messages, no spend</span></pre></div>
+</section>
+
+<footer>OpenAI Budget Guard · <a href="https://github.com/gopalsharma1615-ai/openai-budget-guard">github.com/gopalsharma1615-ai/openai-budget-guard</a> · MIT</footer>
+</main>
+</div>
+
+<script>
+// Mirror of openai_budget_guard/pricing.json (USD per 1M tokens; null cached = input rate)
+const PRICES = {
+  "gpt-5":[1.25,0.125,10.00],"gpt-5.1":[1.25,0.125,10.00],"gpt-5-mini":[0.25,0.025,2.00],"gpt-5-nano":[0.05,0.005,0.40],
+  "gpt-5-pro":[15.00,null,120.00],"gpt-4.1":[2.00,0.50,8.00],"gpt-4.1-mini":[0.40,0.10,1.60],"gpt-4.1-nano":[0.10,0.025,0.40],
+  "gpt-4o":[2.50,1.25,10.00],"gpt-4o-mini":[0.15,0.075,0.60],"o1":[15.00,7.50,60.00],"o1-pro":[150.00,null,600.00],
+  "o3":[2.00,0.50,8.00],"o3-pro":[20.00,null,80.00],"o3-mini":[1.10,0.55,4.40],"o4-mini":[1.10,0.275,4.40],
+  "gpt-3.5-turbo":[0.50,null,1.50],"text-embedding-3-small":[0.02,null,0],"text-embedding-3-large":[0.13,null,0],
+  "text-embedding-ada-002":[0.10,null,0]
+};
+const price = m => { const [i,c,o] = PRICES[m]; return {input:i, cached:c ?? i, output:o}; };
+const $ = id => document.getElementById(id);
+const usd = (v, d) => "$" + v.toLocaleString(undefined, {minimumFractionDigits:d ?? (v < 1 ? 4 : 2), maximumFractionDigits:d ?? (v < 1 ? 6 : 2)});
+
+// price table + model select
+const names = Object.keys(PRICES);
+$("priceRows").innerHTML = names.map(m => { const p = price(m);
+  return `<tr><td><code>${m}</code></td><td class="num">$${p.input.toFixed(3)}</td><td class="num">${PRICES[m][1] === null ? '<span style="color:var(--muted)">= input</span>' : "$" + p.cached.toFixed(3)}</td><td class="num">$${p.output.toFixed(2)}</td></tr>`;
+}).join("");
+$("cModel").innerHTML = names.map(m => `<option${m === "gpt-4o-mini" ? " selected" : ""}>${m}</option>`).join("");
+
+function calc(){
+  const p = price($("cModel").value);
+  const n = v => Math.max(0, Number(v) || 0);
+  const tin = n($("cIn").value), tc = n($("cCached").value), tout = n($("cOut").value), calls = Math.max(1, n($("cCalls").value));
+  const parts = [["Input (uncached)", p.input, tin*p.input/1e6], ["Cached input", p.cached, tc*p.cached/1e6], ["Output", p.output, tout*p.output/1e6]];
+  const per = parts.reduce((a, x) => a + x[2], 0), total = per * calls;
+  $("rTotal").innerHTML = `${usd(total)} <small>for ${calls.toLocaleString()} calls</small>`;
+  $("rPer").textContent = `${usd(per, 6)} per call · ${(tin + tc + tout).toLocaleString()} tokens per call`;
+  $("rRows").innerHTML = parts.map(([k, r, c]) => `<tr><td>${k}</td><td class="num">$${r.toFixed(3)}</td><td class="num">${usd(c, 6)}</td><td class="num">${usd(c*calls)}</td></tr>`).join("")
+    + `<tr><td><b>Total</b></td><td></td><td class="num"><b>${usd(per, 6)}</b></td><td class="num"><b>${usd(total)}</b></td></tr>`;
+  const bars = $("rBar").children;
+  parts.forEach(([, , c], i) => bars[i].style.width = per ? (100*c/per) + "%" : "0");
+  ["lIn","lCached","lOut"].forEach((id, i) => $(id).textContent = `${["Input","Cached","Output"][i]} ${per ? Math.round(100*parts[i][2]/per) : 0}%`);
+  const b = n($("cBudget").value);
+  if (!b) { $("rBudget").innerHTML = '<span style="color:var(--muted)">Enter a budget to compare.</span>'; return; }
+  const pct = 100 * total / b, fits = per ? Math.floor(b / per) : Infinity;
+  const [cls, label] = pct >= 100 ? ["bad","EXHAUSTED"] : pct >= 80 ? ["low","low"] : ["ok","ok"];
+  $("rBudget").innerHTML = `<span class="state ${cls}">${label}</span> &nbsp;Uses <b>${pct.toFixed(1)}%</b> of a ${usd(b, 2)} budget. `
+    + `The budget covers about <b>${fits === Infinity ? "unlimited" : fits.toLocaleString()}</b> calls like this`
+    + (pct >= 100 ? `, so call ${(fits + 1).toLocaleString()} would get <code>cost_budget_exhausted</code>.` : ".");
+}
+["cModel","cIn","cCached","cOut","cCalls","cBudget"].forEach(id => $(id).addEventListener("input", calc));
+calc();
+
+// tabs
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === t));
+  document.querySelectorAll(".panel").forEach(p => p.hidden = p.dataset.panel !== t.dataset.tab);
+}));
+
+// copy buttons
+document.querySelectorAll(".copy").forEach(b => b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(b.parentElement.querySelector("pre").innerText); b.textContent = "Copied"; }
+  catch { b.textContent = "Select & copy"; }
+  setTimeout(() => b.textContent = "Copy", 1500);
+}));
+
+// theme toggle
+$("themeBtn").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openai-budget-guard"
+version = "0.2.0"
+description = "Per-key, per-task token and cost budgets for OpenAI API keys: preflight blocking, metered usage, SQLite ledger, proxy and CLI."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Gopal Sharma" }]
+requires-python = ">=3.10"
+dependencies = ["openai>=1.40", "httpx>=0.27"]
+keywords = ["openai", "llm", "budget", "cost", "rate-limit", "tokens", "finops"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+proxy = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8", "ruff>=0.5", "fastapi>=0.110", "uvicorn>=0.29"]
+
+[project.scripts]
+obg = "openai_budget_guard.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/gopalsharma1615-ai/openai-budget-guard"
+Documentation = "https://gopalsharma1615-ai.github.io/openai-budget-guard/"
+
+[tool.setuptools]
+packages = ["openai_budget_guard"]
+
+[tool.setuptools.package-data]
+openai_budget_guard = ["pricing.json"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
