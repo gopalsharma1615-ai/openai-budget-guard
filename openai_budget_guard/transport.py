@@ -153,12 +153,21 @@ class _SyncSSEStream(httpx.SyncByteStream):
         self.response, self.observer, self.done = response, observer, done
         self.finished = False
 
+    def _settle_if_usage(self) -> None:
+        # Settle the moment the final usage chunk is seen, BEFORE passing it on: a consumer that stops at
+        # [DONE] (the OpenAI SDK does) or disconnects must not leave the request at its estimated cost.
+        if self.observer.usage is not None and not self.finished:
+            self.finished = True
+            self.done(self.observer.usage)
+
     def __iter__(self):
         for chunk in self.response.iter_bytes():
             out = self.observer.feed(chunk)
+            self._settle_if_usage()
             if out:
                 yield out
         tail = self.observer.flush()
+        self._settle_if_usage()
         if tail:
             yield tail
 
@@ -176,12 +185,19 @@ class _AsyncSSEStream(httpx.AsyncByteStream):
         self.response, self.observer, self.done = response, observer, done
         self.finished = False
 
+    async def _settle_if_usage(self) -> None:
+        if self.observer.usage is not None and not self.finished:      # see _SyncSSEStream._settle_if_usage
+            self.finished = True
+            await asyncio.to_thread(self.done, self.observer.usage)
+
     async def __aiter__(self):
         async for chunk in self.response.aiter_bytes():
             out = self.observer.feed(chunk)
+            await self._settle_if_usage()
             if out:
                 yield out
         tail = self.observer.flush()
+        await self._settle_if_usage()
         if tail:
             yield tail
 

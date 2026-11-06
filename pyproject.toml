@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openai-budget-guard"
-version = "0.2.0"
+version = "0.2.1"
 description = "Per-key, per-task token and cost budgets for OpenAI API keys: preflight blocking, metered usage, SQLite ledger, proxy and CLI."
 readme = "README.md"
 license = { text = "MIT" }
