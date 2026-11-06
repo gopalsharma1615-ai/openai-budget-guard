@@ -208,7 +208,15 @@ def test_proxy(env):
         with pytest.raises(openai.RateLimitError) as e:
             chat(oc, max_tokens=200)
         assert e.value.code == "cost_budget_exhausted"
-        st = tc.get("/budget/status", headers={"Authorization": f"Bearer {KEY}"}).json()
+        # The proxy settles a stream's actual usage in a background task that runs after the last chunk is
+        # sent; until then the request's (smaller) reservation is what the ledger holds. Wait for settlement.
+        import time
+
+        for _ in range(40):
+            st = tc.get("/budget/status", headers={"Authorization": f"Bearer {KEY}"}).json()
+            if st[0]["exhausted"]:
+                break
+            time.sleep(0.05)
         assert st[0]["exhausted"] is True
 
 
